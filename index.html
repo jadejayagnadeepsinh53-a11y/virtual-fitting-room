@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Outlet | Live Try-On</title>
+    <!-- Barcode scanning library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+
+        body {
+            font-family: 'Montserrat', sans-serif; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh;
+            background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?q=80&w=2070') no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        .app-container {
+            background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3); padding: 30px; border-radius: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            width: 100%; max-width: 420px; color: white;
+        }
+
+        h2 { text-align: center; margin-top: 0; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; font-size: 20px; margin-bottom: 25px; }
+        label { font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 6px; color: #e0e0e0; }
+
+        input[type="text"], input[type="file"] {
+            width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.4);
+            background: rgba(255,255,255,0.1); color: white; box-sizing: border-box; font-family: 'Montserrat', sans-serif;
+        }
+
+        input[type="file"]::file-selector-button { background: rgba(255,255,255,0.2); border: none; padding: 6px 12px; border-radius: 5px; color: white; cursor: pointer; }
+
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        .input-group input { margin-bottom: 0; }
+
+        .btn-main { width: 100%; padding: 15px; border-radius: 8px; border: none; background: linear-gradient(135deg, #d4af37, #aa8529); color: #000; cursor: pointer; font-weight: 700; font-size: 15px; letter-spacing: 1px; text-transform: uppercase; margin-top: 10px; transition: transform 0.2s;}
+        .btn-main:hover { transform: translateY(-2px); }
+
+        .btn-scan { padding: 10px 15px; border-radius: 8px; border: 1px solid #d4af37; background: transparent; color: #d4af37; cursor: pointer; font-weight: 600; transition: 0.3s; white-space: nowrap; text-align: center;}
+        .btn-scan:hover { background: rgba(212, 175, 55, 0.2); }
+
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; display: none; margin-bottom: 15px; border: 2px solid #d4af37; background: black; }
+        #output_image { width: 100%; border-radius: 12px; margin-top: 20px; display: none; box-shadow: 0 10px 20px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.2); }
+
+        .loading-container { text-align: center; display: none; margin-top: 25px; }
+        .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #d4af37; border-radius: 50%; width: 35px; height: 35px; animation: spin 1s linear infinite; margin: 0 auto 10px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading-text { color: #ffffff; font-weight: 600; font-size: 14px; letter-spacing: 1px;}
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <h2>Premium Outlet</h2>
+        <form id="tryonForm">
+            <div style="margin-bottom: 15px;">
+                <label for="user_image">Client Photo</label>
+                <input type="file" id="user_image" accept="image/*" required>
+            </div>
+
+            <label for="barcode">Garment Barcode</label>
+            <div class="input-group">
+                <input type="text" id="barcode" placeholder="Scan or enter code" required>
+                <button type="button" class="btn-scan" id="scanButton">📷 Scan</button>
+            </div>
+
+            <div id="reader"></div>
+            <button type="button" id="closeScannerBtn" class="btn-scan" style="display:none; width: 100%; margin-bottom: 15px;">Close Scanner</button>
+
+            <button type="submit" class="btn-main">Generate Try-On</button>
+        </form>
+
+        <div id="loadingUI" class="loading-container">
+            <div class="spinner"></div>
+            <div class="loading-text">AI processing photo...</div>
+            <div style="font-size: 11px; color: #ccc; margin-top: 5px;">This may take up to 60 seconds.</div>
+        </div>
+
+        <img id="output_image" src="" alt="AI Try-On Result">
+    </div>
+
+    <script>
+        let html5QrCode;
+        const scanButton = document.getElementById('scanButton');
+        const readerDiv = document.getElementById('reader');
+        const closeScannerBtn = document.getElementById('closeScannerBtn');
+        const barcodeInput = document.getElementById('barcode');
+
+        scanButton.addEventListener('click', () => {
+            readerDiv.style.display = 'block';
+            closeScannerBtn.style.display = 'block';
+
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("reader");
+            }
+
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 100 } },
+                (decodedText) => {
+                    barcodeInput.value = decodedText;
+                    stopScanner();
+                },
+                (errorMessage) => { }
+            ).catch(err => {
+                alert("Camera permission denied. Please allow camera access in your browser.");
+                stopScanner();
+            });
+        });
+
+        closeScannerBtn.addEventListener('click', stopScanner);
+
+        function stopScanner() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    readerDiv.style.display = 'none';
+                    closeScannerBtn.style.display = 'none';
+                });
+            }
+        }
+
+        document.getElementById('tryonForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('user_image');
+            const barcode = barcodeInput.value;
+            const outputImage = document.getElementById('output_image');
+            const loadingUI = document.getElementById('loadingUI');
+
+            const formData = new FormData();
+            formData.append('user_image', fileInput.files[0]);
+            formData.append('barcode', barcode);
+
+            outputImage.style.display = 'none';
+            loadingUI.style.display = 'block';
+
+            try {
+                const response = await fetch('/api/tryon', { method: 'POST', body: formData });
+                const data = await response.json();
+                loadingUI.style.display = 'none';
+
+                if(data.result_image_url) {
+                    outputImage.src = data.result_image_url + "?t=" + new Date().getTime();
+                    outputImage.style.display = 'block';
+                } else {
+                    alert("Error: " + data.error);
+                }
+            } catch (error) {
+                loadingUI.style.display = 'none';
+                alert("Connection failed. Check if Python is running.");
+            }
+        });
+    </script>
+</body>
+</html>
